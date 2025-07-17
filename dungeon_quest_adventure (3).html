@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dungeon Quest Adventure</title>
+  <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'MedievalSharp', 'Georgia', serif;
+      background-color: #A0522D; /* Desk-like brown */
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      height: 100vh;
+      margin: 0;
+      overflow: auto;
+    }
+    .title-banner {
+      text-align: center;
+      background: #4A2C2A; /* Dark brown */
+      color: #D4A017; /* Gold */
+      padding: 10px;
+      border-bottom: 2px solid #D4A017;
+      width: 80%;
+      max-width: 800px;
+      position: absolute;
+      top: 0;
+      z-index: 3;
+    }
+    .quest-log {
+      position: fixed;
+      left: 10px;
+      top: 90px; /* Increased to avoid title banner overlap */
+      width: 200px;
+      background: #F5F1E9;
+      padding: 10px;
+      border: 2px solid #8B4513;
+      border-radius: 5px;
+      z-index: 2;
+      box-shadow: 0 0 5px rgba(0,0,0,0.5);
+      color: #4A2C2A;
+    }
+    .book {
+      width: 80%;
+      max-width: 800px;
+      height: 80vh;
+      background: rgba(255, 255, 255, 0.9); /* Slight transparency */
+      box-shadow: 0 0 20px rgba(0,0,0,0.7);
+      display: flex;
+      border-radius: 10px;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
+      margin: 70px auto 0; /* Centered horizontally with a small gap below title banner */
+    }
+    .page {
+      flex: 1;
+      padding: 20px;
+      border: 1px solid #8B4513; /* Saddle brown */
+      overflow-y: auto;
+      transition: transform 0.5s ease, opacity 0.5s ease;
+      background: #F5F1E9; /* Off-white */
+      color: #4A2C2A; /* Darker text for readability */
+      font-size: 1.5em; /* Increased font size */
+    }
+    .left-page {
+      border-right: 2px solid #8B4513;
+    }
+    .right-page {
+      border-left: 2px solid #8B4513;
+    }
+    .page-flip {
+      transform: rotateY(-20deg);
+      opacity: 0.7;
+    }
+    .page-flip-back {
+      transform: rotateY(20deg);
+      opacity: 0.7;
+    }
+    .character-sheet {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #F5F1E9; /* Off-white */
+      padding: 10px;
+      border: 2px solid #8B4513;
+      border-radius: 5px;
+      z-index: 2;
+      box-shadow: 0 0 5px rgba(0,0,0,0.5);
+      color: #4A2C2A; /* Darker text */
+      max-width: 200px;
+    }
+    button {
+      background: #8B4513;
+      color: #D4A017;
+      border: 2px solid #D4A017;
+      padding: 5px 10px;
+      margin: 5px;
+      cursor: pointer;
+      border-radius: 3px;
+      font-family: 'MedievalSharp', serif;
+    }
+    button:hover {
+      background: #A0522D; /* Sienna */
+      color: #FFF;
+    }
+    .dice-result {
+      font-weight: bold;
+      color: #4A2C2A; /* Darker text */
+    }
+    .page-illustration {
+      max-width: 100px;
+      max-height: 100px;
+      border: 2px solid #8B4513;
+      margin-bottom: 10px;
+      display: block;
+    }
+    .results {
+      position: absolute;
+      top: 110px; /* Adjusted to avoid character sheet and title overlap */
+      right: 220px; /* Adjusted to avoid character sheet */
+      background: #F5F1E9;
+      padding: 10px;
+      border: 2px solid #8B4513;
+      border-radius: 5px;
+      color: #4A2C2A;
+      display: none; /* Hidden by default */
+      font-size: 1.2em;
+      z-index: 1;
+    }
+    .name-input {
+      width: 80%;
+      padding: 10px;
+      font-size: 1em;
+      margin-bottom: 10px;
+    }
+    .quest-item {
+      margin: 5px 0;
+    }
+    .quest-item input[type="checkbox"] {
+      margin-right: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="title-banner">
+    <h1>Dungeon Quest: The Golden Crown</h1>
+  </div>
+  <audio id="page-flip-sound" src="./page-flip.mp3"></audio> <!-- Updated to relative path for GitHub Pages -->
+  <div class="quest-log">
+    <h3>Quest Log</h3>
+    <div class="quest-item"><input type="checkbox" id="quest-crown"><label for="quest-crown">Find the Crown of Auralith</label></div>
+    <div class="quest-item"><input type="checkbox" id="quest-escape"><label for="quest-escape">Escape Dungeon</label></div>
+  </div>
+  <div class="character-sheet">
+    <h3>Character Sheet</h3>
+    <p>Name: <span id="name"></span></p>
+    <p>Health: <span id="health"></span></p>
+    <p>Strength: <span id="strength"></span></p>
+    <p>Gold: <span id="gold"></span> 🪙</p>
+    <p>Temptation: <span id="temptation"></span> 🟣</p>
+    <p>Inventory: <span id="inventory"></span></p>
+    <button id="use-item-btn" style="display: none;">Use Item</button>
+  </div>
+  <div class="book">
+    <div class="page left-page" id="left-page"></div>
+    <div class="page right-page" id="right-page"></div>
+  </div>
+  <div class="results" id="results"></div>
+
+  <script>
+    // Character stats
+    let character = {
+      name: '',
+      health: 10,
+      strength: 5,
+      gold: 0,
+      temptation: 0,
+      inventory: []
+    };
+
+    // Game state
+    let currentPage = 0; // Start at name input page
+    let questState = {
+      crownFound: false,
+      escaped: false
+    };
+
+    // Illustrations for each page (replaced with emoticons/ASCII)
+    const illustrations = {
+      0: { src: "", alt: "📜 Welcome to the quest" },
+      1: { src: "", alt: "🏰 Dungeon entrance with two paths" },
+      2: { src: "", alt: "⚔️ Chamber with a rusty sword and growl" },
+      3: { src: "", alt: "💰 Goblin guarding a treasure chest" },
+      4: { src: "", alt: "💀 Adventurer vs. skeleton with sword" },
+      5: { src: "", alt: "🪙 Alcove with gold and potion" },
+      6: { src: "", alt: "🔑 Defeated goblin with open chest" },
+      7: { src: "", alt: "🎯 Adventurer dodging a dart trap" },
+      8: { src: "", alt: "🪙 Shattered skeleton with gold" },
+      9: { src: "", alt: "🧙‍♂️ Adventurer resting by runes" },
+      10: { src: "", alt: "💎 Hidden alcove with gem" },
+      11: { src: "", alt: "🌉 Crumbling bridge to shrine" },
+      12: { src: "", alt: "🔒 Sealed door with shadowy figure" },
+      13: { src: "", alt: "👻 Spectral voice with amulet offer" },
+      14: { src: "", alt: "👑 Golden Crown on shrine" },
+      15: { src: "", alt: "🗡️ Orc blocking passage" },
+      16: { src: "", alt: "✨ Glowing rune on floor" },
+      17: { src: "", alt: "👑 Adventurer holding the Crown" },
+      18: { src: "", alt: "💀 Crown shrine with skulls" },
+      19: { src: "", alt: "🧟‍♂️ Adventurer as undead with Crown" },
+      20: { src: "", alt: "🌞 Dungeon exit with Crown choice" },
+      21: { src: "", alt: "🌫️ Misty corridor with echoes" },
+      22: { src: "", alt: "🪓 Troll guarding a bridge" },
+      23: { src: "", alt: "💧 Flooded tunnel with current" },
+      24: { src: "", alt: "🔗 Chain trap blocking path" },
+      25: { src: "", alt: "🌿 Overgrown passage with vines" },
+      26: { src: "", alt: "⛰️ Narrow ledge with drop" },
+      27: { src: "", alt: "🕯️ Dimly lit chamber" },
+      28: { src: "", alt: "🚪 Ancient door with runes" },
+      29: { src: "", alt: "🌄 Faint light ahead" },
+      30: { src: "", alt: "🌞 Dungeon exit in sight" }
+    };
+
+    // Story pages
+    const pages = {
+      0: {
+        text: "Welcome, brave soul! Enter your name to begin your quest for the Lost Golden Crown of Auralith.",
+        choices: []
+      },
+      1: {
+        text: "You stand at the entrance of a cursed dungeon, seeking the Lost Golden Crown of Auralith, said to grant immense power but cursed to bind its wearer to the dungeon forever. Two paths lie ahead: a stone staircase descending into darkness or a narrow tunnel with flickering torchlight.",
+        choices: [
+          { text: "Take the staircase", nextPage: 2, action: null },
+          { text: "Enter the tunnel", nextPage: 3, action: rollForEncounter }
+        ]
+      },
+      2: {
+        text: "The staircase leads to a dusty chamber with a rusty sword. A low growl echoes nearby.",
+        choices: [
+          { text: "Pick up the sword", nextPage: 4, action: () => { character.strength += 2; updateCharacterSheet(); showResult(`Strength increased to ${character.strength}!`); } },
+          { text: "Flee", nextPage: 5, action: rollForEncounter }
+        ]
+      },
+      3: {
+        text: "The tunnel opens into a room with a locked treasure chest guarded by a goblin.",
+        choices: [
+          { text: "Fight the goblin", nextPage: 6, action: rollForBattle },
+          { text: "Pick the lock", nextPage: 7, action: rollForEncounter }
+        ]
+      },
+      4: {
+        text: "Sword in hand, you feel stronger. A skeleton lurches from the shadows!",
+        choices: [
+          { text: "Fight the skeleton", nextPage: 8, action: rollForBattle },
+          { text: "Run", nextPage: 5, action: null }
+        ]
+      },
+      5: {
+        text: "You reach a safe alcove and find 5 gold coins and a health potion.",
+        choices: [
+          { text: "Continue", nextPage: 11, action: () => { character.gold += 5; character.inventory.push('Health Potion'); updateCharacterSheet(); showResult(`Gained 5 gold and Health Potion!`); } },
+          { text: "Rest", nextPage: 9, action: () => { character.health += 2; updateCharacterSheet(); showResult(`Health increased to ${character.health}!`); } }
+        ]
+      },
+      6: {
+        text: "The goblin falls! The chest contains 10 gold and a key. Whispers tempt you to seek the crown.",
+        choices: [
+          { text: "Continue", nextPage: 12, action: () => { character.gold += 10; character.inventory.push('Key'); character.temptation += 1; updateCharacterSheet(); showResult(`Gained 10 gold, Key, and Temptation +1!`); } },
+          { text: "Return", nextPage: 1, action: null }
+        ]
+      },
+      7: {
+        text: "You trip a trap while picking the lock!",
+        choices: [
+          { text: "Continue", nextPage: 5, action: rollForEncounter }
+        ]
+      },
+      8: {
+        text: "The skeleton crumbles, dropping 3 gold. A locked door blocks your path.",
+        choices: [
+          { text: "Search", nextPage: 10, action: rollForEncounter },
+          { text: "Proceed", nextPage: 11, action: null }
+        ]
+      },
+      9: {
+        text: "Rested, you feel refreshed. A faint voice urges you to find the crown.",
+        choices: [
+          { text: "Return", nextPage: 1, action: null },
+          { text: "Press on", nextPage: 12, action: () => { character.temptation += 1; updateCharacterSheet(); showResult(`Temptation increased to ${character.temptation}!`); } }
+        ]
+      },
+      10: {
+        text: "You find a hidden gem worth 15 gold and a health potion. The crown’s allure grows stronger.",
+        choices: [
+          { text: "Continue", nextPage: 13, action: () => { character.gold += 15; character.inventory.push('Health Potion'); character.temptation += 1; updateCharacterSheet(); showResult(`Gained 15 gold, Health Potion, and Temptation +1!`); } }
+        ]
+      },
+      11: {
+        text: "A crumbling bridge spans a chasm. Across it, you see a glowing shrine.",
+        choices: [
+          { text: "Cross the bridge", nextPage: 14, action: rollForEncounter },
+          { text: "Find another path", nextPage: 15, action: null }
+        ]
+      },
+      12: {
+        text: "A sealed door with a keyhole blocks your way. A shadowy figure offers power if you wear the crown.",
+        choices: [
+          { text: "Use the key", nextPage: 16, action: () => { if (character.inventory.includes('Key')) { character.inventory.splice(character.inventory.indexOf('Key'), 1); } else { character.health -= 3; } updateCharacterSheet(); showResult(`Key used${!character.inventory.includes('Key') ? '' : ', Health -3!'}`); } },
+          { text: "Ignore", nextPage: 11, action: () => { character.temptation += 2; updateCharacterSheet(); showResult(`Temptation increased to ${character.temptation}!`); } }
+        ]
+      },
+      13: {
+        text: "A spectral voice whispers, 'Wear the crown, claim your destiny.' A cloaked ally appears, offering a magical amulet to resist temptation.",
+        choices: [
+          { text: "Take the amulet", nextPage: 16, action: () => { character.inventory.push('Amulet'); character.temptation = Math.max(0, character.temptation - 2); updateCharacterSheet(); showResult(`Gained Amulet, Temptation reduced to ${character.temptation}!`); } },
+          { text: "Push forward", nextPage: 16, action: () => { character.temptation += 3; updateCharacterSheet(); showResult(`Temptation increased to ${character.temptation}!`); } }
+        ]
+      },
+      14: {
+        text: "You reach the shrine, where the Golden Crown of Auralith rests, glowing faintly.",
+        choices: [
+          { text: "Take the crown", nextPage: 17, action: () => { character.inventory.push('Golden Crown'); questState.crownFound = true; updateQuestLog(); updateCharacterSheet(); showResult(`Gained Golden Crown, Temptation +2!`); } },
+          { text: "Examine it", nextPage: 18, action: rollForEncounter }
+        ]
+      },
+      15: {
+        text: "You find a side passage with an orc blocking the way.",
+        choices: [
+          { text: "Fight the orc", nextPage: 16, action: rollForBattle },
+          { text: "Sneak past", nextPage: 14, action: rollForEncounter }
+        ]
+      },
+      16: {
+        text: "The floor trembles—a collapsing chamber trap! A glowing rune offers safety.",
+        choices: [
+          { text: "Touch the rune", nextPage: 14, action: () => { character.health += 3; character.temptation += 1; updateCharacterSheet(); showResult(`Health +3, Temptation +1!`); } },
+          { text: "Run", nextPage: 17, action: rollForEncounter }
+        ]
+      },
+      17: {
+        text: "With the crown in your possession, its weight feels heavy with promise.",
+        choices: [
+          { text: "Wear the crown", nextPage: 19, action: () => { character.temptation += 5; updateCharacterSheet(); showResult(`Temptation increased to ${character.temptation}!`); } },
+          { text: "Head back", nextPage: 20, action: null }
+        ]
+      },
+      18: {
+        text: "Examining the crown, you sense its curse.",
+        choices: [
+          { text: "Take it", nextPage: 17, action: () => { character.inventory.push('Golden Crown'); questState.crownFound = true; updateQuestLog(); updateCharacterSheet(); showResult(`Gained Golden Crown, Temptation +1!`); } },
+          { text: "Leave it", nextPage: 20, action: null }
+        ]
+      },
+      19: {
+        text: "You place the Golden Crown of Auralith on your head. Power surges through you, but your soul is bound to the dungeon. You are now undead, doomed to wander forever. THE END.",
+        choices: []
+      },
+      20: {
+        text: "You decide to seek the exit. A faint breeze guides you toward a misty corridor.",
+        choices: [
+          { text: "Follow the breeze", nextPage: 21, action: null }
+        ]
+      },
+      21: {
+        text: "You enter a misty corridor with echoing footsteps. The air feels heavy.",
+        choices: [
+          { text: "Move cautiously", nextPage: 22, action: rollForEncounter },
+          { text: "Run forward", nextPage: 23, action: rollForEncounter }
+        ]
+      },
+      22: {
+        text: "A troll guards a rickety bridge. It snarls at your approach.",
+        choices: [
+          { text: "Fight the troll", nextPage: 24, action: rollForBattle },
+          { text: "Distract and cross", nextPage: 25, action: rollForEncounter }
+        ]
+      },
+      23: {
+        text: "You stumble into a flooded tunnel with a strong current pulling you back.",
+        choices: [
+          { text: "Swim against it", nextPage: 26, action: rollForEncounter },
+          { text: "Find a foothold", nextPage: 27, action: null }
+        ]
+      },
+      24: {
+        text: "A chain trap snaps shut, blocking your path with sharp links.",
+        choices: [
+          { text: "Break the chains", nextPage: 28, action: rollForBattle },
+          { text: "Search for a key", nextPage: 29, action: rollForEncounter }
+        ]
+      },
+      25: {
+        text: "An overgrown passage with thick vines slows your progress.",
+        choices: [
+          { text: "Cut through", nextPage: 26, action: null },
+          { text: "Climb over", nextPage: 27, action: rollForEncounter }
+        ]
+      },
+      26: {
+        text: "You reach a narrow ledge with a steep drop below.",
+        choices: [
+          { text: "Edge along", nextPage: 28, action: rollForEncounter },
+          { text: "Jump across", nextPage: 29, action: rollForBattle }
+        ]
+      },
+      27: {
+        text: "A dimly lit chamber reveals a faint outline of an exit.",
+        choices: [
+          { text: "Investigate", nextPage: 28, action: null },
+          { text: "Move to exit", nextPage: 29, action: rollForEncounter }
+        ]
+      },
+      28: {
+        text: "An ancient door with runes blocks your path. It hums with energy.",
+        choices: [
+          { text: "Touch the runes", nextPage: 30, action: rollForEncounter },
+          { text: "Force it open", nextPage: 29, action: rollForBattle }
+        ]
+      },
+      29: {
+        text: "You see faint light ahead, but a final guardian stirs.",
+        choices: [
+          { text: "Confront the guardian", nextPage: 30, action: rollForBattle },
+          { text: "Sneak past", nextPage: 30, action: rollForEncounter }
+        ]
+      },
+      30: {
+        text: "You emerge from the dungeon exit, the curse lifting as you step into daylight. VICTORY!",
+        choices: [],
+        action: () => { questState.escaped = true; updateQuestLog(); }
+      }
+    };
+
+    // Roll a d20
+    function rollD20() {
+      return Math.floor(Math.random() * 20) + 1;
+    }
+
+    // Handle random encounters
+    function rollForEncounter() {
+      try {
+        const roll = rollD20();
+        const resultDiv = document.createElement('div');
+        resultDiv.className = 'dice-result';
+        if (roll < 10) {
+          resultDiv.textContent = `🎲🎲 Encounter Roll: ${roll}. You stumble and lose 2 health!`;
+          character.health = Math.max(0, character.health - 2);
+        } else {
+          resultDiv.textContent = `🎲🎲 Encounter Roll: ${roll}. You avoid danger!`;
+        }
+        updateCharacterSheet();
+        document.getElementById('right-page').appendChild(resultDiv);
+        showResult(`Encounter Roll: ${roll}, Health: ${character.health}`);
+      } catch (e) {
+        console.error('Error in rollForEncounter:', e);
+      }
+    }
+
+    // Handle battles
+    function rollForBattle() {
+      try {
+        const roll = rollD20();
+        const resultDiv = document.createElement('div');
+        resultDiv.className = 'dice-result';
+        const total = roll + character.strength;
+        if (total > 12) {
+          resultDiv.textContent = `🎲🎲 Battle Roll: ${roll} + ${character.strength} = ${total}. Victory!`;
+        } else {
+          resultDiv.textContent = `🎲🎲 Battle Roll: ${roll} + ${character.strength} = ${total}. Defeated! Lose 3 health.`;
+          character.health = Math.max(0, character.health - 3);
+        }
+        updateCharacterSheet();
+        document.getElementById('right-page').appendChild(resultDiv);
+        showResult(`Battle Roll: ${roll} + ${character.strength} = ${total}, Health: ${character.health}`);
+      } catch (e) {
+        console.error('Error in rollForBattle:', e);
+      }
+    }
+
+    // Update character sheet and inventory with icons
+    function updateCharacterSheet() {
+      try {
+        document.getElementById('name').textContent = character.name || 'Adventurer';
+        const healthSpan = document.getElementById('health');
+        healthSpan.innerHTML = `${character.health} ${'🟢'.repeat(character.health)}`;
+        
+        const strengthSpan = document.getElementById('strength');
+        strengthSpan.innerHTML = `${character.strength} ${'🔴'.repeat(character.strength)}`;
+        
+        document.getElementById('gold').textContent = `${character.gold} 🪙`;
+        document.getElementById('temptation').textContent = `${character.temptation} 🟣`;
+        
+        const inventorySpan = document.getElementById('inventory');
+        inventorySpan.innerHTML = character.inventory.map(item => {
+          switch (item) {
+            case 'Health Potion': return '🩹 ' + item;
+            case 'Key': return '🔑 ' + item;
+            case 'Golden Crown': return '👑 ' + item;
+            case 'Amulet': return '💎 ' + item;
+            default: return item;
+          }
+        }).join(', ') || 'None';
+        
+        const useItemBtn = document.getElementById('use-item-btn');
+        useItemBtn.style.display = character.inventory.includes('Health Potion') ? 'block' : 'none';
+        
+        if (character.health <= 0) {
+          document.getElementById('right-page').innerHTML = '<h2>Game Over</h2><p>You have perished. Refresh to restart.</p>';
+        } else if (character.temptation >= 10 && character.inventory.includes('Golden Crown')) {
+          document.getElementById('right-page').innerHTML = '<h2>Temptation Overwhelms</h2><p>The crown’s call is too strong. You wear it and become undead. THE END.</p>';
+          currentPage = 19;
+        }
+      } catch (e) {
+        console.error('Error in updateCharacterSheet:', e);
+      }
+    }
+
+    // Use item from inventory
+    document.getElementById('use-item-btn').addEventListener('click', () => {
+      try {
+        if (character.inventory.includes('Health Potion')) {
+          character.health += 5;
+          character.inventory.splice(character.inventory.indexOf('Health Potion'), 1);
+          updateCharacterSheet();
+          const resultDiv = document.createElement('div');
+          resultDiv.className = 'dice-result';
+          resultDiv.textContent = 'Used Health Potion: Restored 5 health!';
+          document.getElementById('right-page').appendChild(resultDiv);
+          showResult(`Health increased to ${character.health}!`);
+        }
+      } catch (e) {
+        console.error('Error in use-item-btn click:', e);
+      }
+    });
+
+    // Show results at top right
+    function showResult(text) {
+      try {
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.textContent = `Results: ${text}`;
+        resultsDiv.style.display = 'block';
+        setTimeout(() => { resultsDiv.style.display = 'none'; }, 5000); // Hide after 5 seconds
+      } catch (e) {
+        console.error('Error in showResult:', e);
+      }
+    }
+
+    // Update quest log
+    function updateQuestLog() {
+      try {
+        document.getElementById('quest-crown').checked = questState.crownFound;
+        document.getElementById('quest-escape').checked = questState.escaped;
+      } catch (e) {
+        console.error('Error in updateQuestLog:', e);
+      }
+    }
+
+    // Display a page with animation and sound
+    function displayPage(pageId) {
+      try {
+        console.log(`Displaying page ${pageId}`);
+        const page = pages[pageId];
+        if (!page) {
+          console.error(`Page ${pageId} not found`);
+          document.getElementById('right-page').innerHTML = '<p>Error: Page not found. Refresh to restart.</p>';
+          return;
+        }
+
+        const leftPage = document.getElementById('left-page');
+        const rightPage = document.getElementById('right-page');
+        const pageFlipSound = document.getElementById('page-flip-sound');
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.style.display = 'none'; // Hide results on page change
+
+        // Play page-flip sound
+        if (pageFlipSound) {
+          pageFlipSound.currentTime = 0; // Reset to start
+          pageFlipSound.play().catch((error) => console.log('Sound playback failed:', error));
+        }
+
+        // Apply page-flip animation
+        rightPage.classList.add('page-flip');
+        leftPage.classList.add('page-flip-back');
+        setTimeout(() => {
+          rightPage.classList.remove('page-flip');
+          leftPage.classList.remove('page-flip-back');
+        }, 500);
+
+        if (pageId === 0) {
+          // Name input page
+          leftPage.innerHTML = `
+            ${illustrations[pageId].alt ? `<span style="font-size: 2em;">${illustrations[pageId].alt.split(' ')[0]}</span>` : ''}
+            <p>${page.text}</p>
+            <input type="text" id="name-input" class="name-input" placeholder="Enter your name">
+            <button onclick="setName()">Begin Quest</button>
+            <p style="text-align: right;">Page ${pageId}</p>
+          `;
+          rightPage.innerHTML = `<p style="text-align: right;">Page ${pageId}</p>`;
+        } else {
+          // Regular pages
+          // Update left page with illustration, description, and page number
+          leftPage.innerHTML = `
+            ${illustrations[pageId].alt ? `<span style="font-size: 2em;">${illustrations[pageId].alt.split(' ')[0]}</span>` : ''}
+            <p>${page.text}</p>
+            <p style="text-align: right;">Page ${pageId}</p>
+          `;
+
+          // Update right page with choices and page number
+          rightPage.innerHTML = `<p style="text-align: right;">Page ${pageId}</p>`;
+          page.choices.forEach(choice => {
+            const button = document.createElement('button');
+            button.textContent = choice.text;
+            button.onclick = () => {
+              try {
+                if (choice.action) choice.action();
+                currentPage = choice.nextPage;
+                displayPage(currentPage);
+              } catch (e) {
+                console.error('Error in choice click:', e);
+              }
+            };
+            rightPage.appendChild(button);
+          });
+        }
+      } catch (e) {
+        console.error('Error in displayPage:', e);
+        document.getElementById('left-page').innerHTML = '<p>Error loading page. Refresh to restart.</p>';
+        document.getElementById('right-page').innerHTML = '<p>Error loading page. Refresh to restart.</p>';
+      }
+    }
+
+    // Set character name and proceed to page 1
+    function setName() {
+      try {
+        const nameInput = document.getElementById('name-input').value.trim();
+        if (nameInput) {
+          character.name = nameInput;
+          updateCharacterSheet();
+          currentPage = 1;
+          displayPage(currentPage);
+        } else {
+          alert('Please enter a name!');
+        }
+      } catch (e) {
+        console.error('Error in setName:', e);
+      }
+    }
+
+    // Initialize game
+    try {
+      console.log('Initializing game');
+      updateCharacterSheet();
+      updateQuestLog();
+      displayPage(currentPage); // Ensure page 0 is displayed on load
+    } catch (e) {
+      console.error('Error during initialization:', e);
+      document.getElementById('left-page').innerHTML = '<p>Error initializing game. Refresh to restart.</p>';
+      document.getElementById('right-page').innerHTML = '<p>Error initializing game. Refresh to restart.</p>';
+    }
+  </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'960733ee9f5d53aa',t:'MTc1MjcyODcxMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'960738411fb353f2',t:'MTc1MjcyODg4OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96073ec58872dd24',t:'MTc1MjcyOTE1NS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9607424e3bd4bfe3',t:'MTc1MjcyOTMwMC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'96074f5fb8cbbfce',t:'MTc1MjcyOTgzNS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'960757350e08bf69',t:'MTc1MjczMDE1Ni4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
